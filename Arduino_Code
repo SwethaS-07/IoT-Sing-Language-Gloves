@@ -1,0 +1,137 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <SoftwareSerial.h>
+#include <DFRobotDFPlayerMini.h>
+
+LiquidCrystal_I2C lcd(0x27,16,2);
+
+// Bluetooth
+SoftwareSerial btSerial(2,3);
+
+// DFPlayer
+SoftwareSerial dfSerial(10,11);
+DFRobotDFPlayerMini player;
+
+bool phoneTurn = false;
+
+unsigned long lastSend = 0;
+int gestureIndex = 0;
+
+String dummyGestures[] = {
+  "CALL ME",
+  "HELP",
+  "THANK YOU",
+  "YES"
+};
+
+void setup()
+{
+  Serial.begin(9600);
+  btSerial.begin(9600);
+  dfSerial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.print("System Ready");
+
+  if (!player.begin(dfSerial))
+  {
+    Serial.println("DFPlayer Error");
+  }
+
+  player.volume(25);
+}
+
+void playGestureAudio(String gesture)
+{
+  if(gesture == "CALL ME")
+  player.play(1);
+
+  else if(gesture == "HELP")
+  player.play(2);
+
+  else if(gesture == "THANK YOU")
+  player.play(3);
+
+  else if(gesture == "YES")
+  player.play(4);
+}
+
+void loop()
+{
+
+  // -------- RECEIVE FROM PHONE --------
+
+  if(btSerial.available())
+  {
+    String msg = btSerial.readStringUntil('\n');
+    msg.trim();
+
+    Serial.println(msg);
+
+    if(msg == "PHONE_TURN")
+    {
+      phoneTurn = true;
+
+      lcd.clear();
+      lcd.print("Phone Turn");
+      delay(1000);
+      lcd.clear();
+      return;
+    }
+
+    if(msg == "GLOVE_TURN")
+    {
+      phoneTurn = false;
+
+      lcd.clear();
+      lcd.print("Glove Turn");
+      delay(1000);
+      lcd.clear();
+      return;
+    }
+
+    if(phoneTurn)
+    {
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Phone:");
+
+      lcd.setCursor(0,1);
+      lcd.print(msg);
+    }
+  }
+
+
+  // -------- GLOVE MODE --------
+
+  if(!phoneTurn)
+  {
+    if(millis() - lastSend > 3000)
+    {
+      lastSend = millis();
+
+      String gesture = dummyGestures[gestureIndex];
+
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Glove:");
+
+      lcd.setCursor(0,1);
+      lcd.print(gesture);
+
+      // send gesture to phone
+      btSerial.println(gesture);
+
+      Serial.println("Sent: " + gesture);
+
+      // play speaker audio
+      playGestureAudio(gesture);
+
+      gestureIndex++;
+
+      if(gestureIndex >= 4)
+      gestureIndex = 0;
+    }
+  }
+}
