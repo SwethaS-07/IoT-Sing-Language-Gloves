@@ -1,0 +1,91 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <SoftwareSerial.h>
+#include <DFRobotDFPlayerMini.h>
+
+LiquidCrystal_I2C lcd(0x27,16,2);
+
+SoftwareSerial dfSerial(10,11);
+DFRobotDFPlayerMini player;
+
+int thumbPin  = A0;
+int indexPin  = A1;
+int middlePin = A2;
+int ringPin   = A3;
+int littlePin = A6;
+
+const int gestureCount = 2;
+
+int gestureLibrary[gestureCount][5] = {
+  {468, 512, 452, 1023, 1022}, // CALL ME
+  {465, 504, 449, 1022, 1023}  // BYE
+};
+
+String gestureNames[gestureCount] = {
+  "CALL ME",
+  "BYE"
+};
+
+void setup()
+{
+  Serial.begin(9600);
+  dfSerial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.print("Gesture Ready");
+
+  if (!player.begin(dfSerial))
+  {
+    Serial.println("DFPlayer Error");
+  }
+
+  player.volume(25);
+
+  delay(2000);
+  lcd.clear();
+}
+
+void loop()
+{
+  int current[5];
+
+  current[0] = analogRead(thumbPin);
+  current[1] = analogRead(indexPin);
+  current[2] = analogRead(middlePin);
+  current[3] = analogRead(ringPin);
+  current[4] = analogRead(littlePin);
+
+  int bestGesture = -1;
+  long bestError = 999999;
+
+  for(int g = 0; g < gestureCount; g++)
+  {
+    long error = 0;
+
+    for(int f = 0; f < 5; f++)
+    {
+      error += abs(current[f] - gestureLibrary[g][f]);
+    }
+
+    if(error < bestError)
+    {
+      bestError = error;
+      bestGesture = g;
+    }
+  }
+
+  Serial.print("Error: ");
+  Serial.println(bestError);
+
+  if(bestError < 100)
+  {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print(gestureNames[bestGesture]);
+
+    player.play(bestGesture + 1); // plays 0001.mp3, 0002.mp3
+
+    delay(3000);
+  }
+}
